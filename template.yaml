@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM template for Retail Store Products Service
+  API. Resources include DynamoDB Tables, Lambda and API Gateway
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+Globals:
+  Function:
+    Timeout: 30
+    Environment: 
+      Variables:
+        STAGE: !Ref Environment
+        DDB_TABLE_CATEGORIES: categories
+        DDB_TABLE_PRODUCTS: products
+        IMAGE_ROOT_URL: localhost
+        IMAGE_ROOT_URL: localhost/images
+
+Resources:
+  ProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./bin/productsservice/app.zip
+      Handler: main
+      Runtime: go1.x
+      Events:
+        ProductsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ProductsAWSApiGateway
+            Path: /products/{proxy+}
+            Method: GET
+        CategoriesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ProductsAWSApiGateway
+            Path: /categories/{proxy+}
+            Method: GET
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: products
+        - DynamoDBReadPolicy: 
+            TableName: products
+        - DynamoDBWritePolicy:
+            TableName: categories
+        - DynamoDBReadPolicy:
+            TableName: categories
+        - CloudWatchPutMetricPolicy: {}
+
+  ProductsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProductsFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ProductsAWSApiGateway}/*"
+
+  ProductsAWSApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Tags:
+        Service: Products
+        AppType: Serverless
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: API Gateway - Retail Store Products Service
+          description: API Gateway - Retail Store Products Service
+          version: "1.0.0"
+        host: !Sub "execute-api.${AWS::Region}.amazonaws.com"
+        schemes:
+          - https
+        basePath: !Sub "/${Environment}"    
+        paths:
+          /products/{proxy+}:
+            x-summary: List of Products
+            x-amazon-apigateway-any-method:
+              produces:
+               - application/json
+              parameters:
+               - name: proxy
+                 in: path
+                 required: true
+                 schema: 
+                   type: string
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProductsFunction}/invocations"
+                passthroughBehaviour: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+          /categories/{proxy+}:
+            x-summary: List of Categories
+            x-amazon-apigateway-any-method:
+              parameters:
+               - name: proxy
+                 in: path
+                 required: true
+                 schema:
+                   type: string
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProductsFunction}/invocations"
+                passthroughBehaviour: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+
+
+  ProductsDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions: 
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "name"
+          AttributeType: "S"
+        - AttributeName: "featured"
+          AttributeType: "S"
+        - AttributeName: "category"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "name"
+          KeyType: "RANGE"
+      TableName: "products"
+      Tags:
+        - Key: Service
+          Value: Products
+        - Key: AppType
+          Value: Serverless
+      LocalSecondaryIndexes:
+        - IndexName: "id-featured-index"
+          KeySchema:
+            - AttributeName: "id"
+              KeyType: "HASH"
+            - AttributeName: "featured"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+      GlobalSecondaryIndexes:
+        - IndexName: "category-index"
+          KeySchema:
+            - AttributeName: "category"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  CategoriesDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "name"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "name"
+          KeyType: "RANGE"
+      TableName: "categories"
+      Tags:
+        - Key: Service
+          Value: Products
+        - Key: AppType
+          Value: Serverless
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+Outputs:
+  ProductsAWSApiGateway:
+    Description: "API Gateway endpoint URL for Dec stage for Products Service"
+    Value: !Sub "https://${ProductsAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+  ProductsAWSApiGatewayRestApiId:
+    Description: 'API Gateway ARN for Basic AWS API Gateway'
+    Value: !Ref ProductsAWSApiGateway
+    Export:
+      Name: ProductsAWSApiGateway-RestApiId
+  ProductsAWSApiGatewayRootResourceId:
+    Value: !GetAtt ProductsAWSApiGateway.RootResourceId
+    Export:
+      Name: ProductsAWSApiGateway-RootResourceId
+
+
+
