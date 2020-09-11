@@ -1,8 +1,6 @@
 build:
-	go build -o main productsservice
-	mkdir -p  bin/productsservice
-	cp -avr productsservice/data data
-	zip -r bin/productsservice/app.zip main data/*
-	rm -rf data
-	mv main bin/productsservice/app
+	go build -o main ~/work/src/productsservice/src
+	mkdir -p  ~/work/src/bin/productsservice
+	zip -r ~/work/src/bin/productsservice/app.zip main data/*
+	mv main ~/work/src/bin/productsservice/app
 	

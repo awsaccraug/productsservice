@@ -27,7 +27,7 @@ Resources:
   ProductsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./bin/productsservice/app.zip
+      CodeUri: ./../bin/productsservice/app.zip
       Handler: main
       Runtime: go1.x
       Events:
