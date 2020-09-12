@@ -2,3 +2,5 @@ serverless
 *.zip
 .env
 samconfig.toml
+env.json
+
